@@ -116,8 +116,8 @@ flowchart TD
 
 ### Paso 1: Clonar el Repositorio
 ```powershell
-git clone <URL_DEL_REPOSITORIO>
-cd Microservicios
+git clone https://github.com/SaidJuniorProgrammer/-Microservicios.git
+cd -Microservicios
 ```
 
 ### Paso 2: Configurar Variables de Entorno
