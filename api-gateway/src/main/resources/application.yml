@@ -1,0 +1,54 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    loadbalancer:
+      cache:
+        ttl: 2s
+    gateway:
+      default-filters:
+        - name: Retry
+          args:
+            retries: 3
+            series:
+              - SERVER_ERROR
+            statuses:
+              - BAD_GATEWAY
+              - SERVICE_UNAVAILABLE
+              - GATEWAY_TIMEOUT
+            methods:
+              - GET
+              - POST
+            backoff:
+              firstBackoff: 50ms
+              maxBackoff: 300ms
+              factor: 2
+      discovery:
+        locator:
+          enabled: false
+      routes:
+        - id: servicio-pedidos-route
+          uri: lb://servicio-pedidos
+          predicates:
+            - Path=/api/pedidos/**
+        - id: servicio-productos-route
+          uri: lb://servicio-productos
+          predicates:
+            - Path=/api/productos/**
+
+eureka:
+  instance:
+    prefer-ip-address: true
+  client:
+    service-url:
+      defaultZone: http://eureka-server:8761/eureka/
+    registry-fetch-interval-seconds: 2
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway

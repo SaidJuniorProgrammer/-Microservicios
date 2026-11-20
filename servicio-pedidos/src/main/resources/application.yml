@@ -1,0 +1,40 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: servicio-pedidos
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          batch_size: 20
+  datasource:
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres_password}
+    primary:
+      url: ${DB_PRIMARY_URL:jdbc:postgresql://postgres-primary:5432/pedidos_db}
+    replica1:
+      url: ${DB_REPLICA1_URL:jdbc:postgresql://postgres-replica-1:5432/pedidos_db}
+    replica2:
+      url: ${DB_REPLICA2_URL:jdbc:postgresql://postgres-replica-2:5432/pedidos_db}
+
+eureka:
+  instance:
+    instance-id: ${EUREKA_INSTANCE_INSTANCE_ID:${spring.application.name}:${random.value}}
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 3
+    lease-expiration-duration-in-seconds: 5
+  client:
+    service-url:
+      defaultZone: http://eureka-server:8761/eureka/
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

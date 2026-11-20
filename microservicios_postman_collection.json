@@ -1,0 +1,155 @@
+{
+  "info": {
+    "name": "Microservicios Distribuidos - UPSE (Pinto, Gonabay, Stalin)",
+    "description": "Coleccion de pruebas para arquitectura distribuida con Eureka, Spring Cloud Gateway, OpenFeign y PostgreSQL Replicado (Master + 2 Replicas).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "gateway_url", "value": "http://localhost:8080" },
+    { "key": "eureka_url", "value": "http://localhost:8761" }
+  ],
+  "item": [
+    {
+      "name": "01. Eureka Discovery",
+      "item": [
+        {
+          "name": "Listar Aplicaciones Registradas",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{eureka_url}}/eureka/apps",
+              "host": ["{{eureka_url}}"],
+              "path": ["eureka", "apps"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. Servicio Productos",
+      "item": [
+        {
+          "name": "Listar Todos los Productos",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/productos",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "productos"]
+            }
+          }
+        },
+        {
+          "name": "Obtener Producto por Codigo",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/productos/codigo/PROD-001",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "productos", "codigo", "PROD-001"]
+            }
+          }
+        },
+        {
+          "name": "Crear Producto Nuevo",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigo\": \"PROD-006\",\n  \"nombre\": \"Tablet Samsung Galaxy Tab S9\",\n  \"precio\": 650.00,\n  \"stock\": 25,\n  \"categoria\": \"Tablets\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/productos",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "productos"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. Servicio Pedidos",
+      "item": [
+        {
+          "name": "Crear Pedido (Write -> Primary + Feign a Productos)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cliente\": \"Said Pinto\",\n  \"productoCodigo\": \"PROD-001\",\n  \"cantidad\": 1\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/pedidos",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "pedidos"]
+            }
+          }
+        },
+        {
+          "name": "Listar Pedidos (Read -> Replicas)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/pedidos",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "pedidos"]
+            }
+          }
+        },
+        {
+          "name": "Inspeccionar Nodo BD (Consulta Ordinaria Replicas)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/pedidos/db/inspect",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "pedidos", "db", "inspect"]
+            }
+          }
+        },
+        {
+          "name": "Inspeccionar Nodo BD (Consulta Critica Primario)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/pedidos/db/inspect-critico",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "pedidos", "db", "inspect-critico"]
+            }
+          }
+        },
+        {
+          "name": "Estado de Salud de Replicas",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/pedidos/db/health",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "pedidos", "db", "health"]
+            }
+          }
+        },
+        {
+          "name": "Info Instancia (Balanceo HTTP)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{gateway_url}}/api/pedidos/info/instance",
+              "host": ["{{gateway_url}}"],
+              "path": ["api", "pedidos", "info", "instance"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
