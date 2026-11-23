@@ -4,7 +4,15 @@ server:
 spring:
   application:
     name: servicio-pedidos
+  cloud:
+    # Cache corta del balanceador para Feign: refleja altas/bajas de servicio-productos en ~2 s
+    loadbalancer:
+      cache:
+        ttl: 2s
   jpa:
+    # Sin Open-Session-In-View: cada transaccion obtiene su propia conexion, de modo que el
+    # router elige nodo por transaccion y un reintento de lectura usa una conexion nueva.
+    open-in-view: false
     hibernate:
       ddl-auto: update
     show-sql: true
@@ -32,6 +40,8 @@ eureka:
   client:
     service-url:
       defaultZone: http://eureka-server:8761/eureka/
+    # Por defecto el cliente refresca el registro cada 30 s
+    registry-fetch-interval-seconds: 2
 
 management:
   endpoints:

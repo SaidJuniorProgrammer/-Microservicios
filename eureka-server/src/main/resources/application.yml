@@ -17,6 +17,10 @@ eureka:
     wait-time-in-ms-when-sync-empty: 0
     enable-self-preservation: false
     eviction-interval-timer-in-ms: 3000
+    # Por defecto Eureka sirve el registro desde una cache de solo lectura que se
+    # refresca cada 30 s; asi los clientes tardaban hasta 30 s en enterarse de una baja.
+    use-read-only-response-cache: false
+    response-cache-update-interval-ms: 2000
 
 management:
   endpoints:

@@ -22,7 +22,8 @@ Este proyecto implementa una arquitectura distribuida orientada a microservicios
   * **Operaciones de Escritura:** Dirigidas al Primario (`postgres-primary`).
   * **Consultas Ordinarias:** Distribuidas equitativamente entre las réplicas (`postgres-replica-1` y `postgres-replica-2`).
   * **Lecturas Críticas (Read-After-Write):** Forzadas al Primario mediante la anotación `@CriticalRead` o la cabecera `X-Critical-Read: true` para garantizar consistencia inmediata y prevenir lectura de datos desactualizados por retraso de replicación.
-  * **Tolerancia a Fallos de BD:** Si una réplica se detiene, el router redirige automáticamente las consultas a la réplica restante o al nodo primario sin interrumpir el servicio.
+  * **Tolerancia a Fallos de BD:** Un chequeo cada 2 s excluye la réplica que no responde. Si una consulta no obtiene conexión de una réplica caída aún no detectada, o la conexión se corta a mitad de una lectura ordinaria, la lectura se reintenta en la otra réplica (o en el primario si no queda ninguna), sin devolver error al cliente. Una réplica recuperada solo se reincorpora cuando está en modo standby y su receptor WAL está en `streaming`.
+* **Resiliencia HTTP en el Gateway:** Timeout de conexión de 1 s y reintento automático en otra instancia cuando la conexión no llega a establecerse (instancia caída). No se reintenta ante respuestas 5xx, para no duplicar pedidos ni descuentos de stock.
 * **Despliegue Contenedorizado:** Orquestación completa y reproducible con **Docker Compose**.
 
 ---
@@ -167,7 +168,9 @@ El directorio `scripts/` contiene scripts de PowerShell para automatizar y evide
 .\scripts\p08_recuperacion_replica.ps1   # P08: Recuperación y reincorporación de réplica
 ```
 
-Consulte el documento [INFORME_PRUEBAS.md](file:///C:/Users/said2/Microservicios/INFORME_PRUEBAS.md) para el análisis técnico detallado y las evidencias de cada prueba.
+Consulte el documento [INFORME_PRUEBAS.md](INFORME_PRUEBAS.md) para el análisis técnico detallado y las evidencias de cada prueba. La salida completa de una ejecución real de la suite se encuentra en [evidencias/ejecucion_p01_p08.txt](evidencias/ejecucion_p01_p08.txt).
+
+> **Nota:** P06 deja `postgres-replica-1` detenida y P08 la reinicia; ejecútelas en ese orden (o use `run_all_tests.ps1`). Las IPs de los contenedores pueden variar entre equipos.
 
 ---
 
@@ -188,7 +191,7 @@ docker compose down -v
 ## 8. Colección de Pruebas Postman
 
 En la raíz del proyecto se encuentra el archivo:
-[microservicios_postman_collection.json](file:///C:/Users/said2/Microservicios/microservicios_postman_collection.json)
+[microservicios_postman_collection.json](microservicios_postman_collection.json)
 Importe este archivo en Postman o Bruno para probar de forma interactiva todas las operaciones REST documentadas.
 
 ---
@@ -198,4 +201,4 @@ Importe este archivo en Postman o Bruno para probar de forma interactiva todas l
 * **Enlace de YouTube / Drive:** `[PENDIENTE DE INSERTAR TRAS GRABACIÓN]`
 * **Duración:** 4 minutos y 30 segundos.
 * **Participantes:** Oscar Gonabay, Jean Stalin y Said Pinto.
-* Consulte el [GUION_VIDEO.md](file:///C:/Users/said2/Microservicios/GUION_VIDEO.md) para la estructura de la presentación.
+* Consulte el [GUION_VIDEO.md](GUION_VIDEO.md) para la estructura de la presentación.

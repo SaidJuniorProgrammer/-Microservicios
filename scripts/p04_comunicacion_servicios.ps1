@@ -40,7 +40,25 @@ try {
     $resError = Invoke-RestMethod -Uri $pedidoUrl -Method Post -Body $bodyExceso -Headers $headers
     Write-Host "   Error: debio rechazar el pedido." -ForegroundColor Red
 } catch {
-    Write-Host "   Exito: la solicitud fue rechazada por falta de stock. Detalle: $_" -ForegroundColor Green
+    Write-Host "   Exito: rechazada con HTTP $($_.Exception.Response.StatusCode.value__). Detalle: $_" -ForegroundColor Green
 }
+
+Write-Host "`n5. Probando manejo de errores: Producto inexistente (servicio-productos responde 404)..." -ForegroundColor Yellow
+$bodyInexistente = @{
+    cliente = "Said Pinto"
+    productoCodigo = "PROD-999"
+    cantidad = 1
+} | ConvertTo-Json
+
+try {
+    Invoke-RestMethod -Uri $pedidoUrl -Method Post -Body $bodyInexistente -Headers $headers | Out-Null
+    Write-Host "   Error: debio rechazar el pedido." -ForegroundColor Red
+} catch {
+    Write-Host "   Exito: rechazada con HTTP $($_.Exception.Response.StatusCode.value__). Detalle: $_" -ForegroundColor Green
+}
+
+Write-Host "`n6. Traza en los logs de servicio-pedidos:" -ForegroundColor Yellow
+docker logs --since 30s servicio-pedidos-1 2>&1 | Select-String "\[PEDIDO\]" | ForEach-Object { "   [instancia-1] $_" }
+docker logs --since 30s servicio-pedidos-2 2>&1 | Select-String "\[PEDIDO\]" | ForEach-Object { "   [instancia-2] $_" }
 
 Write-Host "`n[P04 EXITOSO] Comunicacion entre microservicios verificada correctamente." -ForegroundColor Green

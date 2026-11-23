@@ -2,44 +2,70 @@ Write-Host "==========================================================" -Foregro
 Write-Host " P03 - Tolerancia a Fallos de Instancia de Microservicio" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
+# Trafico continuo (una solicitud cada ~200 ms) ANTES, DURANTE y DESPUES del fallo.
+# No se espera tras el 'docker stop': se registra la ventana de fallo completa.
+
 $gatewayUrl = "http://localhost:8080/api/pedidos/info/instance"
+$log = New-Object System.Collections.Generic.List[object]
+$sw = [System.Diagnostics.Stopwatch]::StartNew()
 
-Write-Host "1. Verificando estado inicial con ambas instancias activas..." -ForegroundColor Yellow
-for ($i = 1; $i -le 4; $i++) {
-    $res = Invoke-RestMethod -Uri $gatewayUrl -Method Get
-    Write-Host "   Solicitud $($i) respondida por: $($res.instanceId)" -ForegroundColor White
-}
-
-Write-Host "`n2. Simulando caida: Deteniendo 'servicio-pedidos-1'..." -ForegroundColor Red
-docker stop servicio-pedidos-1
-
-Write-Host "   Esperando 5 segundos para actualizacion de Eureka..." -ForegroundColor Gray
-Start-Sleep -Seconds 5
-
-Write-Host "`n3. Enviando solicitudes durante la caida de instancia 1..." -ForegroundColor Yellow
-$falloExitoso = $true
-for ($i = 1; $i -le 6; $i++) {
+function Send-Probe($fase) {
+    $t0 = $sw.Elapsed.TotalSeconds
     try {
-        $res = Invoke-RestMethod -Uri $gatewayUrl -Method Get -TimeoutSec 3
-        Write-Host "   Solicitud $($i) respondida por: $($res.instanceId)" -ForegroundColor Green
-        if ($res.instanceId -ne "servicio-pedidos-instancia-2") {
-            $falloExitoso = $false
-        }
+        $r = Invoke-RestMethod -Uri $gatewayUrl -Method Get -TimeoutSec 5
+        $estado = "200"; $inst = $r.instanceId
     } catch {
-        Write-Host "   Solicitud $($i) fallo: $_" -ForegroundColor Red
+        $estado = "ERROR"; $inst = "-"
     }
+    $dur = [math]::Round(($sw.Elapsed.TotalSeconds - $t0) * 1000)
+    $log.Add([pscustomobject]@{ t = [math]::Round($t0, 1); fase = $fase; estado = $estado; ms = $dur; instancia = $inst })
+    Start-Sleep -Milliseconds 200
 }
 
-Write-Host "`n4. Recuperando instancia: Iniciando 'servicio-pedidos-1'..." -ForegroundColor Cyan
-docker start servicio-pedidos-1
+Write-Host "1. Trafico inicial con ambas instancias (5 s)..." -ForegroundColor Yellow
+$fin = $sw.Elapsed.TotalSeconds + 5
+while ($sw.Elapsed.TotalSeconds -lt $fin) { Send-Probe "ANTES" }
 
-Write-Host "   Esperando 8 segundos para reintegro en Eureka..." -ForegroundColor Gray
-Start-Sleep -Seconds 8
+Write-Host "2. Deteniendo 'servicio-pedidos-1' (sin pausa, el trafico continua)..." -ForegroundColor Red
+$tStop = $sw.Elapsed.TotalSeconds
+$job = Start-Job { docker stop servicio-pedidos-1 | Out-Null }
+$fin = $sw.Elapsed.TotalSeconds + 20
+while ($sw.Elapsed.TotalSeconds -lt $fin) { Send-Probe "DURANTE" }
+Wait-Job $job | Out-Null; Remove-Job $job
 
-Write-Host "`n5. Verificando reintegro de ambas instancias..." -ForegroundColor Yellow
-for ($i = 1; $i -le 4; $i++) {
-    $res = Invoke-RestMethod -Uri $gatewayUrl -Method Get
-    Write-Host "   Solicitud $($i) respondida por: $($res.instanceId)" -ForegroundColor White
+Write-Host "3. Iniciando 'servicio-pedidos-1'..." -ForegroundColor Cyan
+docker start servicio-pedidos-1 | Out-Null
+$tStart = $sw.Elapsed.TotalSeconds
+$tReinc = $null
+$fin = $sw.Elapsed.TotalSeconds + 40
+while ($sw.Elapsed.TotalSeconds -lt $fin) {
+    Send-Probe "DESPUES"
+    if (-not $tReinc -and $log[-1].instancia -eq "servicio-pedidos-instancia-1") { $tReinc = $log[-1].t }
 }
 
-Write-Host "`n[P03 EXITOSO] El sistema mantuvo continuidad operativa durante la interrupcion." -ForegroundColor Green
+Write-Host "`nResultados por fase:" -ForegroundColor Green
+foreach ($fase in "ANTES", "DURANTE", "DESPUES") {
+    $f = $log | Where-Object fase -eq $fase
+    $ok = ($f | Where-Object estado -eq "200").Count
+    $err = ($f | Where-Object estado -ne "200").Count
+    $i1 = ($f | Where-Object instancia -eq "servicio-pedidos-instancia-1").Count
+    $i2 = ($f | Where-Object instancia -eq "servicio-pedidos-instancia-2").Count
+    $max = ($f | Measure-Object ms -Maximum).Maximum
+    Write-Host ("  {0,-8} total={1,3} ok={2,3} errores={3,2} inst-1={4,3} inst-2={5,3} latencia_max={6} ms" -f $fase, $f.Count, $ok, $err, $i1, $i2, $max)
+}
+
+$ultimaI1 = ($log | Where-Object { $_.instancia -eq "servicio-pedidos-instancia-1" -and $_.t -lt $tStart } | Select-Object -Last 1).t
+Write-Host "`nTiempos observados:" -ForegroundColor Yellow
+Write-Host ("  Ultima respuesta de instancia-1 antes del fallo: {0:N1} s tras iniciar el 'docker stop'" -f ($ultimaI1 - $tStop))
+if ($tReinc) {
+    Write-Host ("  Reincorporacion de instancia-1: {0:N1} s despues del 'docker start'" -f ($tReinc - $tStart))
+} else {
+    Write-Host "  Instancia-1 aun no reincorporada en la ventana observada." -ForegroundColor Yellow
+}
+
+$errores = ($log | Where-Object estado -ne "200").Count
+if ($errores -eq 0) {
+    Write-Host "`n[P03 EXITOSO] Sin errores visibles para el cliente durante el fallo." -ForegroundColor Green
+} else {
+    Write-Host "`n[P03 CON ERRORES TRANSITORIOS] $errores solicitudes fallaron durante la ventana de deteccion." -ForegroundColor Yellow
+}

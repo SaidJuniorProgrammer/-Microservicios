@@ -6,6 +6,7 @@ import com.upse.pedidos.config.CriticalRead;
 import com.upse.pedidos.config.RoutingContext;
 import com.upse.pedidos.model.Pedido;
 import com.upse.pedidos.repository.PedidoRepository;
+import feign.FeignException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -49,7 +50,14 @@ public class PedidoService {
         log.info("[PEDIDO] Procesando creacion de pedido: cliente={}, producto={}, cantidad={}", cliente, productoCodigo, cantidad);
 
         // 1. Comunicacion entre microservicios (Feign) mediante descubrimiento Eureka
-        ProductoDto producto = productoClient.obtenerPorCodigo(productoCodigo);
+        // Feign lanza FeignException.NotFound ante un 404 (nunca devuelve null),
+        // por eso se traduce explicitamente a un error de negocio "no encontrado".
+        ProductoDto producto;
+        try {
+            producto = productoClient.obtenerPorCodigo(productoCodigo);
+        } catch (FeignException.NotFound e) {
+            throw new IllegalArgumentException("El producto con codigo " + productoCodigo + " no existe.");
+        }
         if (producto == null) {
             throw new IllegalArgumentException("El producto con codigo " + productoCodigo + " no existe.");
         }
@@ -60,7 +68,14 @@ public class PedidoService {
         }
 
         // 2. Descontar stock en servicio-productos mediante Feign
-        productoClient.descontarStock(productoCodigo, cantidad);
+        try {
+            productoClient.descontarStock(productoCodigo, cantidad);
+        } catch (FeignException.BadRequest e) {
+            // Otro pedido concurrente consumio el stock entre la consulta y el descuento.
+            throw new IllegalStateException("Stock insuficiente para el producto: " + producto.getNombre());
+        } catch (FeignException.NotFound e) {
+            throw new IllegalArgumentException("El producto con codigo " + productoCodigo + " no existe.");
+        }
 
         // 3. Crear y persistir el pedido en postgres-primary
         BigDecimal precioTotal = producto.getPrecio().multiply(BigDecimal.valueOf(cantidad));
@@ -104,18 +119,13 @@ public class PedidoService {
                 .orElseThrow(() -> new IllegalArgumentException("Pedido no encontrado: " + numeroPedido));
     }
 
-    // Inspección de nodo PostgreSQL ejecutado
+    // Inspección de nodo PostgreSQL ejecutado (lectura ordinaria).
+    // Los errores de conexion se propagan para que ReplicaReadRetryAspect reintente en otra replica.
     @Transactional(readOnly = true)
     public Map<String, Object> inspeccionarNodoPostgres() {
-        Map<String, Object> nodeInfo = new HashMap<>();
-        try {
-            Map<String, Object> raw = repository.getPostgresNodeInfo();
-            nodeInfo.putAll(raw);
-            nodeInfo.put("routingSelection", RoutingContext.getLastSelected());
-            nodeInfo.put("instanceProcessing", getHostIdentifier());
-        } catch (Exception e) {
-            nodeInfo.put("error", e.getMessage());
-        }
+        Map<String, Object> nodeInfo = new HashMap<>(repository.getPostgresNodeInfo());
+        nodeInfo.put("routingSelection", RoutingContext.getLastSelected());
+        nodeInfo.put("instanceProcessing", getHostIdentifier());
         return nodeInfo;
     }
 

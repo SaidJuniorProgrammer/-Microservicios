@@ -25,5 +25,5 @@ foreach ($s in $scripts) {
 }
 
 Write-Host "`n==========================================================" -ForegroundColor Green
-Write-Host " TODAS LAS PRUEBAS EXPERIMENTALES HAN FINALIZADO CON EXITO " -ForegroundColor Green
+Write-Host "  SUITE FINALIZADA - REVISE EL RESULTADO DE CADA ESCENARIO  " -ForegroundColor Green
 Write-Host "==========================================================" -ForegroundColor Green

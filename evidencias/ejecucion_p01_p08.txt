@@ -1,0 +1,219 @@
+==========================================================
+     SUITE COMPLETA DE PRUEBAS EXPERIMENTALES (P01-P08)    
+   ARQUITECTURA DE MICROSERVICIOS Y PERSISTENCIA DISTRIBUIDA
+   Integrantes: Oscar Gonabay, Jean Stalin, Said Pinto     
+==========================================================
+
+
+>>> EJECUTANDO ESCENARIO: p01_descubrimiento.ps1 <<<
+==========================================================
+ P01 - Verificacion de Descubrimiento Dinamico en Eureka
+==========================================================
+
+Microservicios registrados en Eureka Server:
+
+* Aplicacion: SERVICIO-PEDIDOS
+  - Instancia ID : servicio-pedidos-instancia-1
+    Host / IP    : 172.27.0.6:8081
+    Estado       : UP
+  - Instancia ID : servicio-pedidos-instancia-2
+    Host / IP    : 172.27.0.7:8081
+    Estado       : UP
+
+* Aplicacion: API-GATEWAY
+  - Instancia ID : 56e620262720:api-gateway:8080
+    Host / IP    : 172.27.0.8:8080
+    Estado       : UP
+
+* Aplicacion: SERVICIO-PRODUCTOS
+  - Instancia ID : f278deb0dc27:servicio-productos:8082
+    Host / IP    : 172.27.0.9:8082
+    Estado       : UP
+
+[P01 EXITOSO] Todos los servicios estan registrados y descubiertos dinamicamente.
+
+>>> EJECUTANDO ESCENARIO: p02_balanceo_http.ps1 <<<
+==========================================================
+ P02 - Balanceo de Carga HTTP (100 Solicitudes via Gateway)
+==========================================================
+Enviando 100 peticiones a http://localhost:8080/api/pedidos/info/instance...
+
+Resultados del balanceo de carga HTTP:
+----------------------------------------------------------
+Total peticiones exitosas: 100
+Total peticiones con error: 0
+Distribucion por instancia:
+  * servicio-pedidos-instancia-2 : 50 peticiones (50 %)
+  * servicio-pedidos-instancia-1 : 50 peticiones (50 %)
+
+[P02 EXITOSO] Demostracion de balanceo Round-Robin completada.
+
+>>> EJECUTANDO ESCENARIO: p03_fallo_instancia.ps1 <<<
+==========================================================
+ P03 - Tolerancia a Fallos de Instancia de Microservicio
+==========================================================
+1. Trafico inicial con ambas instancias (5 s)...
+2. Deteniendo 'servicio-pedidos-1' (sin pausa, el trafico continua)...
+3. Iniciando 'servicio-pedidos-1'...
+
+Resultados por fase:
+  ANTES    total= 23 ok= 23 errores= 0 inst-1= 11 inst-2= 12 latencia_max=13 ms
+  DURANTE  total= 92 ok= 92 errores= 0 inst-1=  1 inst-2= 91 latencia_max=70 ms
+  DESPUES  total=186 ok=186 errores= 0 inst-1= 77 inst-2=109 latencia_max=95 ms
+
+Tiempos observados:
+  Ultima respuesta de instancia-1 antes del fallo: 0,2 s tras iniciar el 'docker stop'
+  Reincorporacion de instancia-1: 7,1 s despues del 'docker start'
+
+[P03 EXITOSO] Sin errores visibles para el cliente durante el fallo.
+
+>>> EJECUTANDO ESCENARIO: p04_comunicacion_servicios.ps1 <<<
+==========================================================
+ P04 - Comunicacion Sincrona entre Microservicios (Feign)
+==========================================================
+1. Consultando stock inicial de 'PROD-001' en servicio-productos...
+   Producto: Laptop Dell Latitude 5420
+   Stock Inicial: 50
+
+2. Creando pedido en servicio-pedidos (llamara a servicio-productos via Feign)...
+   Pedido Creado: PED-E3AC0F0F
+   Cliente      : Oscar Gonabay
+   Total        : $ 1700
+   Estado       : CONFIRMADO
+
+3. Verificando descuento de stock en servicio-productos...
+   Stock Actual : 48 (Deseado: 48)
+
+4. Probando manejo de errores: Solicitando stock superior al disponible...
+   Exito: rechazada con HTTP 400. Detalle: 
+{
+  "instanceId": "servicio-pedidos-instancia-2",
+  "error": "Stock insuficiente para el producto: Laptop Dell Latitude 5420 (Disponible: 48, Solicitado: 9999)"
+}
+
+5. Probando manejo de errores: Producto inexistente (servicio-productos responde 404)...
+   Exito: rechazada con HTTP 404. Detalle: 
+{
+  "error": "El producto con codigo PROD-999 no existe.",
+  "instanceId": "servicio-pedidos-instancia-1"
+}
+
+6. Traza en los logs de servicio-pedidos:
+   [instancia-1] 2026-11-23T23:20:35.259Z  INFO 1 --- [servicio-pedidos] [nio-8081-exec-8] com.upse.pedidos.service.PedidoService   : [PEDIDO] Procesando creacion de pedido: cliente=Oscar Gonabay, producto=PROD-001, cantidad=2
+   [instancia-1] 2026-11-23T23:20:35.440Z  INFO 1 --- [servicio-pedidos] [nio-8081-exec-8] com.upse.pedidos.service.PedidoService   : [PEDIDO] Pedido guardado exitosamente con ID 1 en nodo PRIMARY
+   [instancia-1] 2026-11-23T23:20:35.661Z  INFO 1 --- [servicio-pedidos] [nio-8081-exec-9] com.upse.pedidos.service.PedidoService   : [PEDIDO] Procesando creacion de pedido: cliente=Said Pinto, producto=PROD-999, cantidad=1
+   [instancia-2] 2026-11-23T23:20:35.513Z  INFO 1 --- [servicio-pedidos] [nio-8081-exec-3] com.upse.pedidos.service.PedidoService   : [PEDIDO] Procesando creacion de pedido: cliente=Jean Stalin, producto=PROD-001, cantidad=9999
+
+[P04 EXITOSO] Comunicacion entre microservicios verificada correctamente.
+
+>>> EJECUTANDO ESCENARIO: p05_enrutamiento_db.ps1 <<<
+==========================================================
+ P05 - Enrutamiento de Persistencia (Primary vs Replicas)
+==========================================================
+1. Ejecutando Escritura (POST /api/pedidos) -> Debe ir al PRIMARIO...
+   Respuesta HTTP: 201
+   Cabecera X-DB-Node devuelta: PRIMARY (Esperado: PRIMARY)
+
+2. Ejecutando 8 Consultas Ordinarias (GET /api/pedidos/db/inspect)...
+   Deben distribuirse entre REPLICA_1 y REPLICA_2 (pg_is_in_recovery = true)
+   Lectura 1 -> Nodo Seleccionado: REPLICA_1 | Es Replica?: True | IP Contenedor: 172.27.0.5
+   Lectura 2 -> Nodo Seleccionado: REPLICA_1 | Es Replica?: True | IP Contenedor: 172.27.0.5
+   Lectura 3 -> Nodo Seleccionado: REPLICA_2 | Es Replica?: True | IP Contenedor: 172.27.0.4
+   Lectura 4 -> Nodo Seleccionado: REPLICA_2 | Es Replica?: True | IP Contenedor: 172.27.0.4
+   Lectura 5 -> Nodo Seleccionado: REPLICA_1 | Es Replica?: True | IP Contenedor: 172.27.0.5
+   Lectura 6 -> Nodo Seleccionado: REPLICA_1 | Es Replica?: True | IP Contenedor: 172.27.0.5
+   Lectura 7 -> Nodo Seleccionado: REPLICA_2 | Es Replica?: True | IP Contenedor: 172.27.0.4
+   Lectura 8 -> Nodo Seleccionado: REPLICA_2 | Es Replica?: True | IP Contenedor: 172.27.0.4
+
+[P05 EXITOSO] Escrituras dirigidas al Primario y lecturas balanceadas entre réplicas.
+
+>>> EJECUTANDO ESCENARIO: p06_fallo_replica.ps1 <<<
+==========================================================
+ P06 - Tolerancia a Fallos de Replica PostgreSQL
+==========================================================
+1. Estado de contenedores:
+postgres-primary  Up 2 minutes (healthy)
+postgres-replica-1  Up About a minute
+postgres-replica-2  Up About a minute
+
+2. Lecturas con ambas replicas (4 s)...
+3. Deteniendo 'postgres-replica-1' (el trafico continua)...
+
+Resultados por fase:
+  ANTES    total= 19 ok= 19 errores= 0 REPLICA_1= 10 REPLICA_2=  9 latencia_max=14 ms
+  DURANTE  total= 51 ok= 51 errores= 0 REPLICA_1=  0 REPLICA_2= 51 latencia_max=1013 ms
+
+  Ultima lectura atendida por REPLICA_1: -0,4 s respecto al 'docker stop'
+
+4. Estado del selector de replicas en la aplicacion:
+   {"REPLICA_1":false,"REPLICA_2":true}
+postgres-primary  Up 2 minutes (healthy)
+postgres-replica-1  Exited (0) 12 seconds ago
+postgres-replica-2  Up 2 minutes
+
+[P06 EXITOSO] Las consultas continuaron a traves de la replica saludable restante.
+
+>>> EJECUTANDO ESCENARIO: p07_consistencia_lectura.ps1 <<<
+==========================================================
+ P07 - Consistencia de Lectura Critica (Read-After-Write)
+==========================================================
+1. Creando pedido de alta prioridad...
+   Pedido generado: PED-1B9AA362
+
+2. Realizando LECTURA CRITICA inmediata con direccionamiento forzado al PRIMARIO...
+   Codigo HTTP: 200
+   Cabecera X-DB-Node: PRIMARY (Esperado: PRIMARY)
+
+3. Inspeccionando nodo de base de datos bajo contexto critico...
+   Nodo Reportado : PRIMARY
+   Es Replica?    : False (Esperado: False -> Primario)
+   IP Servidor DB : 172.27.0.3
+
+[P07 EXITOSO] Politica de consistencia aplicada: Lecturas criticas dirigidas al Primario.
+
+>>> EJECUTANDO ESCENARIO: p08_recuperacion_replica.ps1 <<<
+==========================================================
+ P08 - Recuperacion y Reincorporacion de Replica PostgreSQL
+==========================================================
+1. Escribiendo un pedido mientras 'postgres-replica-1' esta detenida...
+   Pedido creado en PRIMARY: PED-F6B12228
+   Filas en primario: 4
+
+2. Reiniciando contenedor 'postgres-replica-1'...
+   Esperando a que la aplicacion la considere apta (standby + WAL en streaming)...
+   REPLICA_1 reincorporada 10,1 s despues del 'docker start'
+
+3. Estado de replicacion visto desde el primario (pg_stat_replication):
+ client_addr |   state   | sync_state |   replay_lag    
+-------------+-----------+------------+-----------------
+ 172.27.0.4  | streaming | async      | 
+ 172.27.0.5  | streaming | async      | 00:00:00.003079
+(2 rows)
+
+4. Datos escritos durante la caida presentes en la replica recuperada:
+   Filas en replica-1: 4 (primario: 4) | pg_is_in_recovery: t
+
+5. Ejecutando 10 lecturas para comprobar reincorporacion en el balanceo...
+   Lectura 1 -> Atendida por: REPLICA_2 (IP: 172.27.0.4)
+   Lectura 2 -> Atendida por: REPLICA_1 (IP: 172.27.0.5)
+   Lectura 3 -> Atendida por: REPLICA_1 (IP: 172.27.0.5)
+   Lectura 4 -> Atendida por: REPLICA_2 (IP: 172.27.0.4)
+   Lectura 5 -> Atendida por: REPLICA_2 (IP: 172.27.0.4)
+   Lectura 6 -> Atendida por: REPLICA_1 (IP: 172.27.0.5)
+   Lectura 7 -> Atendida por: REPLICA_1 (IP: 172.27.0.5)
+   Lectura 8 -> Atendida por: REPLICA_2 (IP: 172.27.0.4)
+   Lectura 9 -> Atendida por: REPLICA_1 (IP: 172.27.0.5)
+   Lectura 10 -> Atendida por: REPLICA_2 (IP: 172.27.0.4)
+
+[P08 EXITOSO] Replica 1 recuperada, sincronizada e integrada nuevamente a la rotacion.
+
+==========================================================
+  SUITE FINALIZADA - REVISE EL RESULTADO DE CADA ESCENARIO  
+==========================================================
+
+=== Logs del selector de replicas (servicio-pedidos) durante P06/P08 ===
+[servicio-pedidos-1] 2026-11-23T23:20:46.065Z  WARN 1 --- [servicio-pedidos] [   scheduling-1] c.u.p.config.DynamicRoutingDataSource    : [ROUTING-DB] REPLICA_1 cambia de estado: SALUDABLE -> NO DISPONIBLE (excluida)
+[servicio-pedidos-1] 2026-11-23T23:21:11.064Z  WARN 1 --- [servicio-pedidos] [   scheduling-1] c.u.p.config.DynamicRoutingDataSource    : [ROUTING-DB] REPLICA_1 cambia de estado: NO DISPONIBLE -> SALUDABLE (reincorporada)
+[servicio-pedidos-2] 2026-11-23T23:20:45.575Z  WARN 1 --- [servicio-pedidos] [   scheduling-1] c.u.p.config.DynamicRoutingDataSource    : [ROUTING-DB] REPLICA_1 cambia de estado: SALUDABLE -> NO DISPONIBLE (excluida)
+[servicio-pedidos-2] 2026-11-23T23:20:45.907Z  WARN 1 --- [servicio-pedidos] [nio-8081-exec-7] c.u.p.config.DynamicRoutingDataSource    : [ROUTING-DB] REPLICA_1 no disponible (HikariPool-Replica1 - Connection is not available, request timed out after 1000ms.). Reintentando la consulta en REPLICA_2
+[servicio-pedidos-2] 2026-11-23T23:21:02.575Z  WARN 1 --- [servicio-pedidos] [   scheduling-1] c.u.p.config.DynamicRoutingDataSource    : [ROUTING-DB] REPLICA_1 cambia de estado: NO DISPONIBLE -> SALUDABLE (reincorporada)
