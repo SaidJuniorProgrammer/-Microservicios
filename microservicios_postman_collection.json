@@ -5,8 +5,18 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "gateway_url", "value": "http://localhost:8080" },
-    { "key": "eureka_url", "value": "http://localhost:8761" }
+    {
+      "key": "gateway_url",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "eureka_url",
+      "value": "http://localhost:8761"
+    },
+    {
+      "key": "numero_pedido",
+      "value": ""
+    }
   ],
   "item": [
     {
@@ -17,12 +27,20 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Accept", "value": "application/json" }
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{eureka_url}}/eureka/apps",
-              "host": ["{{eureka_url}}"],
-              "path": ["eureka", "apps"]
+              "host": [
+                "{{eureka_url}}"
+              ],
+              "path": [
+                "eureka",
+                "apps"
+              ]
             }
           }
         }
@@ -37,8 +55,13 @@
             "method": "GET",
             "url": {
               "raw": "{{gateway_url}}/api/productos",
-              "host": ["{{gateway_url}}"],
-              "path": ["api", "productos"]
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "productos"
+              ]
             }
           }
         },
@@ -48,8 +71,15 @@
             "method": "GET",
             "url": {
               "raw": "{{gateway_url}}/api/productos/codigo/PROD-001",
-              "host": ["{{gateway_url}}"],
-              "path": ["api", "productos", "codigo", "PROD-001"]
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "productos",
+                "codigo",
+                "PROD-001"
+              ]
             }
           }
         },
@@ -58,7 +88,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -66,8 +99,13 @@
             },
             "url": {
               "raw": "{{gateway_url}}/api/productos",
-              "host": ["{{gateway_url}}"],
-              "path": ["api", "productos"]
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "productos"
+              ]
             }
           }
         }
@@ -81,7 +119,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -89,8 +130,138 @@
             },
             "url": {
               "raw": "{{gateway_url}}/api/pedidos",
-              "host": ["{{gateway_url}}"],
-              "path": ["api", "pedidos"]
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "pedidos"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Guarda el numero de pedido para las consultas posteriores",
+                  "if (pm.response.code === 201) { pm.collectionVariables.set('numero_pedido', pm.response.json().numeroPedido); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar Pedido Ordinario (Read -> Replica)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway_url}}/api/pedidos/{{numero_pedido}}",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "pedidos",
+                "{{numero_pedido}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Consultar Pedido Critico (Read-After-Write -> Primary)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gateway_url}}/api/pedidos/{{numero_pedido}}/critico",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "pedidos",
+                "{{numero_pedido}}",
+                "critico"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Inspeccionar Nodo BD con cabecera X-Critical-Read (-> Primary)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Critical-Read",
+                "value": "true"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway_url}}/api/pedidos/db/inspect",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "pedidos",
+                "db",
+                "inspect"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Error: Stock Insuficiente (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cliente\": \"Jean Stalin\",\n  \"productoCodigo\": \"PROD-001\",\n  \"cantidad\": 9999\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/pedidos",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "pedidos"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Error: Producto Inexistente (404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cliente\": \"Oscar Gonabay\",\n  \"productoCodigo\": \"PROD-999\",\n  \"cantidad\": 1\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/pedidos",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "pedidos"
+              ]
             }
           }
         },
@@ -100,8 +271,13 @@
             "method": "GET",
             "url": {
               "raw": "{{gateway_url}}/api/pedidos",
-              "host": ["{{gateway_url}}"],
-              "path": ["api", "pedidos"]
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "pedidos"
+              ]
             }
           }
         },
@@ -111,8 +287,15 @@
             "method": "GET",
             "url": {
               "raw": "{{gateway_url}}/api/pedidos/db/inspect",
-              "host": ["{{gateway_url}}"],
-              "path": ["api", "pedidos", "db", "inspect"]
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "pedidos",
+                "db",
+                "inspect"
+              ]
             }
           }
         },
@@ -122,8 +305,15 @@
             "method": "GET",
             "url": {
               "raw": "{{gateway_url}}/api/pedidos/db/inspect-critico",
-              "host": ["{{gateway_url}}"],
-              "path": ["api", "pedidos", "db", "inspect-critico"]
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "pedidos",
+                "db",
+                "inspect-critico"
+              ]
             }
           }
         },
@@ -133,8 +323,15 @@
             "method": "GET",
             "url": {
               "raw": "{{gateway_url}}/api/pedidos/db/health",
-              "host": ["{{gateway_url}}"],
-              "path": ["api", "pedidos", "db", "health"]
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "pedidos",
+                "db",
+                "health"
+              ]
             }
           }
         },
@@ -144,8 +341,15 @@
             "method": "GET",
             "url": {
               "raw": "{{gateway_url}}/api/pedidos/info/instance",
-              "host": ["{{gateway_url}}"],
-              "path": ["api", "pedidos", "info", "instance"]
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "pedidos",
+                "info",
+                "instance"
+              ]
             }
           }
         }

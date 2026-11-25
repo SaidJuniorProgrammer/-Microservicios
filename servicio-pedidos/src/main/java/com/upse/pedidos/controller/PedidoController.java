@@ -4,6 +4,7 @@ import com.upse.pedidos.config.DynamicRoutingDataSource;
 import com.upse.pedidos.config.RoutingContext;
 import com.upse.pedidos.model.Pedido;
 import com.upse.pedidos.service.PedidoService;
+import feign.FeignException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -63,6 +64,11 @@ public class PedidoController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .headers(createInstanceHeaders())
                     .body(Map.of("error", e.getMessage(), "instanceId", instanceId));
+        } catch (FeignException e) {
+            // servicio-productos caido o sin instancias registradas en Eureka
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .headers(createInstanceHeaders())
+                    .body(Map.of("error", "servicio-productos no disponible: " + e.getMessage(), "instanceId", instanceId));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .headers(createInstanceHeaders())
@@ -72,9 +78,11 @@ public class PedidoController {
 
     @GetMapping
     public ResponseEntity<List<Pedido>> listarOrdinario() {
+        // Se consulta primero para que la cabecera X-DB-Node refleje el nodo usado
+        List<Pedido> pedidos = service.listarPedidosOrdinario();
         return ResponseEntity.ok()
                 .headers(createInstanceHeaders())
-                .body(service.listarPedidosOrdinario());
+                .body(pedidos);
     }
 
     @GetMapping("/{numeroPedido}")

@@ -9,19 +9,28 @@ spring:
       cache:
         ttl: 2s
     gateway:
+      # Tiempos maximos hacia los microservicios: una instancia caida se detecta
+      # en ~1 s (en lugar de quedar colgada) y el filtro Retry pasa a la otra instancia.
+      httpclient:
+        connect-timeout: 1000
+        response-timeout: 5s
       default-filters:
+        # Reintento en otra instancia SOLO cuando la conexion no llego a establecerse
+        # (instancia caida o inaccesible): la solicitud nunca fue procesada, por lo que
+        # es seguro reintentar tanto GET como POST. No se reintenta ante respuestas 5xx
+        # ni timeouts de respuesta, para no crear pedidos ni descontar stock mas de una vez.
+        # (Un solo filtro Retry: varios filtros Retry comparten el contador de intentos.)
         - name: Retry
           args:
             retries: 3
-            series:
-              - SERVER_ERROR
-            statuses:
-              - BAD_GATEWAY
-              - SERVICE_UNAVAILABLE
-              - GATEWAY_TIMEOUT
+            series: []
+            statuses: []
             methods:
               - GET
               - POST
+            exceptions:
+              - java.net.ConnectException
+              - io.netty.channel.ConnectTimeoutException
             backoff:
               firstBackoff: 50ms
               maxBackoff: 300ms

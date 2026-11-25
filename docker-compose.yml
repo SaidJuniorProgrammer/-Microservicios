@@ -10,6 +10,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
       POSTGRES_DB: postgres
+      POSTGRES_REPLICATION_USER: ${POSTGRES_REPLICATION_USER:-replicator}
+      POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:-replicator_pass}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5440:5432"
@@ -27,6 +29,8 @@ services:
     container_name: postgres-replica-1
     environment:
       PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_REPLICATION_USER: ${POSTGRES_REPLICATION_USER:-replicator}
+      POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:-replicator_pass}
     ports:
       - "5441:5432"
     depends_on:
@@ -41,6 +45,8 @@ services:
     container_name: postgres-replica-2
     environment:
       PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_REPLICATION_USER: ${POSTGRES_REPLICATION_USER:-replicator}
+      POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:-replicator_pass}
     ports:
       - "5442:5432"
     depends_on:
