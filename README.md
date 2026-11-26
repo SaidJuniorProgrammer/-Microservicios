@@ -198,7 +198,7 @@ Importe este archivo en Postman o Bruno para probar de forma interactiva todas l
 
 ## 9. Enlace del Video Demostrativo
 
-* **Enlace de YouTube / Drive:** `[PENDIENTE DE INSERTAR TRAS GRABACIÓN]`
+* **Enlace de YouTube / Drive:** `https://1drv.ms/v/c/b4a4ebd0e9c3a318/IQANshiIsqnWTqZvr0MuXlA0Ab_EATvtzR5gMqzAxoac7sI?e=CAIa8e`
 * **Duración:** 4 minutos y 30 segundos.
 * **Participantes:** Oscar Gonabay, Jean Stalin y Said Pinto.
 * Consulte el [GUION_VIDEO.md](GUION_VIDEO.md) para la estructura de la presentación.
